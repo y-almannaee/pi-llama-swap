@@ -1,0 +1,19 @@
+{
+  "name": "pi-llama-cpp",
+  "version": "0.1.0",
+  "description": "Pi extension for llama.cpp integration. Supports both router and single modes",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "llama-cpp",
+    "llama.cpp"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "pi": {
+    "extensions": [
+      "./index"
+    ]
+  }
+}
