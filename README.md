@@ -13,7 +13,13 @@ A [Pi Coding Agent](https://pi.dev/) extension that integrates with a running [l
 
 ## Installation
 
-This package is a Pi extension. Install it in your project:
+This package is a Pi extension. Install it with
+
+```bash
+pi install npm:pi-llama-cpp
+```
+
+or
 
 ```bash
 pi install https://github.com/gsanhueza/pi-llama-cpp
