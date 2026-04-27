@@ -1,6 +1,6 @@
 {
   "name": "pi-llama-cpp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Pi extension for llama.cpp integration. Supports both router and single modes",
   "keywords": [
     "pi",
@@ -8,8 +8,15 @@
     "pi-extension",
     "llama-cpp"
   ],
-  "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+  "author": "Gabriel Sanhueza",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gsanhueza/pi-llama-cpp.git"
+  },
+  "homepage": "https://github.com/gsanhueza/pi-llama-cpp#readme",
+  "bugs": {
+    "url": "https://github.com/gsanhueza/pi-llama-cpp/issues"
   },
   "pi": {
     "extensions": [
