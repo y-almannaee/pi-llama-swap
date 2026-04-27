@@ -22,5 +22,11 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0"
   }
 }
