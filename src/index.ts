@@ -2,11 +2,11 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@mariozechner/pi-coding-agent";
-import { modelsCommandHandler } from "./src/handlers";
-import { isServerReady, listModels } from "./src/tools/retriever";
-import { resolveApiKey, resolveUrl } from "./src/tools/resolver";
-import { PROVIDER_NAME } from "./src/constants";
-import { onModelSelect } from "./src/events";
+import { modelsCommandHandler } from "./handlers";
+import { isServerReady, listModels } from "./tools/retriever";
+import { resolveApiKey, resolveUrl } from "./tools/resolver";
+import { PROVIDER_NAME } from "./constants";
+import { onModelSelect } from "./events";
 
 export default async function (pi: ExtensionAPI) {
   // Command registration
