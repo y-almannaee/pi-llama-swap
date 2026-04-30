@@ -5,7 +5,7 @@ import type {
 import { modelsCommandHandler } from "./handlers";
 import { isServerReady, listModels } from "./tools/retriever";
 import { resolveApiKey, resolveUrl } from "./tools/resolver";
-import { PROVIDER_NAME } from "./constants";
+import { PROVIDER_ID, PROVIDER_NAME } from "./constants";
 import { onModelSelect } from "./events";
 
 export default async function (pi: ExtensionAPI) {
@@ -36,7 +36,8 @@ export default async function (pi: ExtensionAPI) {
   });
 
   // Provider registration
-  pi.registerProvider(PROVIDER_NAME, {
+  pi.registerProvider(PROVIDER_ID, {
+    name: PROVIDER_NAME,
     baseUrl: `${url}/v1`,
     api: "openai-completions",
     apiKey: await resolveApiKey(),

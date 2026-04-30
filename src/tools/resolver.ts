@@ -1,4 +1,4 @@
-import { DEFAULT_LLAMA_SERVER_URL, PROVIDER_NAME } from "../constants";
+import { DEFAULT_LLAMA_SERVER_URL, PROVIDER_ID } from "../constants";
 import { access, readFile, constants } from "node:fs/promises";
 import { join } from "node:path";
 import { IAuthFile } from "../interfaces/IAuthFile";
@@ -60,7 +60,7 @@ export const resolveApiKey = async (): Promise<string> => {
   const authPath = join(process.env.HOME || ".", ".pi", "agent", "auth.json");
   if (!(await fileExists(authPath))) return placeholder;
 
-  const response = await readConfigValue<IAuthFile>(authPath, PROVIDER_NAME);
+  const response = await readConfigValue<IAuthFile>(authPath, PROVIDER_ID);
   return response ?? placeholder;
 };
 

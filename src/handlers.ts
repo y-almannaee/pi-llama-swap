@@ -5,7 +5,7 @@ import type {
 import { Status } from "./enums/status";
 import { BaseModel } from "./models/baseModel";
 import { Actions } from "./enums/actions";
-import { PROVIDER_NAME } from "./constants";
+import { PROVIDER_ID, PROVIDER_NAME } from "./constants";
 
 /**
  * Defines a handler when llama-server is running
@@ -37,7 +37,7 @@ const modelSelectionHandler = async (
   const status = await model.getStatus();
   const actions = allActions[status];
 
-  const action = (await ctx.ui.select(`${model.id}`, actions)) as Actions;
+  const action = (await ctx.ui.select(`${model.name}`, actions)) as Actions;
   if (!action || action === Actions.CANCEL) return null;
 
   // Send the selected action with the corresponding model
@@ -63,22 +63,22 @@ export const modelsCommandHandler = async (
   // Action: Unload
   if (action === Actions.UNLOAD) {
     await model.unload();
-    ctx.ui.notify(`Unloaded ${model.id}`, "info");
+    ctx.ui.notify(`Unloaded ${model.name}`, "info");
     return;
   }
 
   // Actions: Switch/Retry
   if ([Actions.SWITCH, Actions.RETRY].includes(action)) {
-    ctx.ui.notify(`Loading ${model.id}...`, "info");
+    ctx.ui.notify(`Loading ${model.name}...`, "info");
 
     const onSuccess = async () => {
-      const piModel = ctx.modelRegistry.find(PROVIDER_NAME, model.id);
+      const piModel = ctx.modelRegistry.find(PROVIDER_ID, model.id);
       if (!piModel) {
-        throw new Error(`Cannot find model ${model.id} in pi registry`);
+        throw new Error(`Cannot find model ${model.name} (${model.id}) in pi registry`);
       }
 
       await pi.setModel(piModel);
-      ctx.ui.notify(`Model ${model.id} ready`, "info");
+      ctx.ui.notify(`Model ${model.name} ready`, "info");
     };
 
     const onFailure = (err: any) => {

@@ -1,7 +1,12 @@
 /**
+ * This provider's id
+ */
+export const PROVIDER_ID = "llama-server";
+
+/**
  * This provider's name
  */
-export const PROVIDER_NAME = "llama-server";
+export const PROVIDER_NAME = "Llama.cpp";
 
 /**
  * The default URL if the resolver couldn't find it
