@@ -9,25 +9,30 @@ import { Status } from "./enums/status";
 import { BaseModel } from "./models/baseModel";
 
 /**
- * Defines a handler when llama-server is running
+ * Select a model from the list. Returns null if user cancels.
+ *
  * @param ctx Pi context
- * @returns The action and model, if detected
+ * @param models A list of models
+ * @returns The selected model
  */
-const modelSelectionHandler = async (
+const selectModel = async (
   ctx: ExtensionCommandContext,
   models: BaseModel[],
-): Promise<{ action: Action; model: BaseModel } | null> => {
-  // Setup the labels
+): Promise<BaseModel | null> => {
   const labels = await Promise.all(models.map((m) => m.getLabel()));
-
-  // Detect the selected model
   const choice = await ctx.ui.select(`${PROVIDER_NAME} models:`, labels);
   if (!choice) return null;
-
   const idx = labels.indexOf(choice);
-  const model = models[idx];
+  return models[idx];
+};
 
-  // Router mode actions
+/**
+ * Get available actions for a model based on its mode and status.
+ *
+ * @param model The selected model
+ * @returns
+ */
+const getActionsForModel = async (model: BaseModel): Promise<Array<Action>> => {
   const routerModeActions: Record<Status, Array<Action>> = {
     [Status.LOADED]: [Action.SWITCH, Action.UNLOAD, Action.INFO, Action.CANCEL],
     [Status.LOADING]: [Action.CANCEL],
@@ -36,7 +41,6 @@ const modelSelectionHandler = async (
     [Status.UNLOADED]: [Action.LOAD, Action.CANCEL],
   };
 
-  // Single mode actions (more limited)
   const singleModeActions: Record<Status, Array<Action>> = {
     [Status.LOADED]: [Action.INFO, Action.CANCEL],
     [Status.LOADING]: [Action.CANCEL],
@@ -45,21 +49,69 @@ const modelSelectionHandler = async (
     [Status.UNLOADED]: [Action.CANCEL],
   };
 
-  // Define the actions that the user can do
   const allActions =
     model.mode === Mode.ROUTER ? routerModeActions : singleModeActions;
 
   const status = await model.getStatus();
-  const actions = allActions[status];
+  return allActions[status];
+};
 
-  const action = (await ctx.ui.select(`${model.name}`, actions)) as Action;
+/**
+ * Selects an action for a model.
+ *
+ * @param ctx Pi context
+ * @param model The selected model
+ * @param actions Possible actions to execute
+ * @returns The action, or null if user cancels
+ */
+const selectAction = async (
+  ctx: ExtensionCommandContext,
+  model: BaseModel,
+  actions: Array<Action>,
+): Promise<Action | null> => {
+  const labels = actions.map((a) => String(a));
+  const choice = await ctx.ui.select(`${model.name}`, labels);
+  if (!choice) return null;
 
-  // Send the selected action with the corresponding model
-  return { action, model };
+  const idx = labels.indexOf(choice);
+  return actions[idx];
+};
+
+/**
+ * Handles the menu for model selection
+ * Loops: select model → select action → handle action.
+ *
+ * Escape on actions menu goes back to model selection.
+ * Escape on model selection exits.
+ *
+ * @param ctx Pi context
+ * @returns The action and model, if detected
+ */
+const modelSelectionHandler = async (
+  ctx: ExtensionCommandContext,
+  models: BaseModel[],
+): Promise<{ action: Action; model: BaseModel } | null> => {
+  while (true) {
+    // Select the model
+    const model = await selectModel(ctx, models);
+    if (!model) return null;
+
+    // Select the action
+    const actions = await getActionsForModel(model);
+    const action = await selectAction(ctx, model, actions);
+    if (action === null) {
+      // Escape key pressed => back to model selection
+      continue;
+    }
+
+    // Return the selected action and model
+    return { action, model };
+  }
 };
 
 /**
  * Handles the /models command
+ *
  * @param ctx The context used by Pi
  * @param pi The Pi extension
  */
