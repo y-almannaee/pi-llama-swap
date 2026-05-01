@@ -6,19 +6,20 @@ A [Pi Coding Agent](https://pi.dev/) extension that integrates with a running [l
 
 - **Auto-detect models** — discovers all models available on your running llama.cpp server
 - **Live status indicators** — see which models are loaded, loading, failed, sleeping, or unloaded with color-coded icons
-
-  | Icon | Status | Description |
-  |------|--------|-------------|
-  | 🟢 | Loaded | Model is active and ready to use |
-  | 🟡 | Loading | Model is currently being loaded |
-  | 🔴 | Failed | Model failed to load |
-  | 🔵 | Sleeping | Model is loaded but inactive (router mode) |
-  | ⚪ | Unloaded | Model is not loaded on the server |
-
 - **Load / unload / switch** — manage models directly from the Pi command palette
 - **Multi-model router support** — works with both single-model and multi-model llama.cpp server configurations
-- **Image model support** — detects multimodal models automatically
+- **Image capabilities detection** — detects multimodal models automatically
 - **Flexible URL resolution** — configures the server URL via project config, environment variable, or global settings
+
+### Status Indicators
+
+| Icon | Status | Description |
+|------|--------|-------------|
+| 🟢 | Loaded | Model is active and ready to use |
+| 🟡 | Loading | Model is currently being loaded |
+| 🔴 | Failed | Model failed to load |
+| 🔵 | Sleeping | Model is loaded but inactive (router mode) |
+| ⚪ | Unloaded | Model is not loaded on the server |
 
 ## Installation
 
@@ -60,9 +61,9 @@ The extension resolves the llama.cpp server URL using the following priority ord
 
 ### API Key
 
-If your llama.cpp server requires authentication, use `/login` in Pi, select the "API key" option, and choose the `Llama.cpp` provider.
+If your llama.cpp server requires authentication, use `/login` in Pi, select the "API key" option, and choose the `Llama.cpp` provider from the list.
 
-Alternatively, configure the API key in `~/.pi/agent/auth.json`:
+Alternatively, configure the API key in `~/.pi/agent/auth.json` using the provider ID `llama-server`:
 
 ```json
 {
@@ -77,15 +78,17 @@ Alternatively, configure the API key in `~/.pi/agent/auth.json`:
 
 ### Prerequisites
 
-Make sure your llama.cpp server is running with the appropriate flags. For multi-model support (model router), start the server with:
+Make sure your llama.cpp server is running with the appropriate flags.
+
+- For multi-model support (model router), start the server with:
 
 ```bash
-llama-server --models-preset path/to/presets.ini
+llama-server --models-preset path/to/presets.ini ...
 ```
 
-(You can use both `--fit-ctx` and `--ctx-size` in the preset — the extension checks both.)
+The extension reads the context size from the preset file using the `ctx-size` and/or `fit-ctx` keys.
 
-For single-model mode, a standard invocation works:
+- For single-model mode, start the server with:
 
 ```bash
 llama-server --model path/to/model.gguf --ctx-size 128000 ...
@@ -97,6 +100,8 @@ llama-server --model path/to/model.gguf --ctx-size 128000 ...
 | --------- | ------------------------------------------------------------------------------------------ |
 | `/models` | Browse your models with live status. Select a model to load, switch, or unload it.         |
 
+> **Note:** When the llama.cpp server is unreachable, `/models` is still available but displays an error notification with the configured server URL.
+
 ### Model Actions
 
 When browsing models via the `/models` command, you can:
@@ -107,6 +112,8 @@ When browsing models via the `/models` command, you can:
 - **Retry** — Retry loading a failed model
 - **Info** — View model details (ID, capabilities, context size)
 - **Cancel** — Cancel the current operation
+
+> **Note:** In single-model mode, only **Info** and **Cancel** are available, since there is only one model loaded on the server.
 
 ### Model Selection Event
 
