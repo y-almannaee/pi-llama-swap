@@ -45,7 +45,7 @@ const getActionsForModel = async (model: BaseModel): Promise<Array<Action>> => {
     [Status.LOADED]: [Action.INFO, Action.CANCEL],
     [Status.LOADING]: [Action.CANCEL],
     [Status.FAILED]: [Action.CANCEL],
-    [Status.SLEEPING]: [Action.CANCEL],
+    [Status.SLEEPING]: [Action.INFO, Action.CANCEL],
     [Status.UNLOADED]: [Action.CANCEL],
   };
 

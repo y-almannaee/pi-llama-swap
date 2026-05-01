@@ -1,7 +1,7 @@
 import { DEFAULT_CTX } from "../constants";
 import { Mode } from "../enums/mode";
 import { Status } from "../enums/status";
-import { ISingleModel } from "../interfaces/ISingleModel";
+import { ISingleModel, ISingleProps } from "../interfaces/ISingleModel";
 import { rpc } from "../tools/retriever";
 import { BaseModel } from "./baseModel";
 
@@ -29,6 +29,9 @@ export class SingleModel extends BaseModel {
 
   async getStatus(): Promise<Status> {
     // In single-mode, the extension will only work when the model is fully loaded
+    const { is_sleeping } = await rpc<ISingleProps>("/props");
+    if (is_sleeping) return Status.SLEEPING;
+
     return Status.LOADED;
   }
 
