@@ -1,6 +1,6 @@
 import { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { PROVIDER_NAME } from "./constants";
-import { ModelSelectEvent } from "./interfaces/IModelSelectEvent";
+import { ModelSelectEvent } from "./interfaces/events";
 import { listModels } from "./tools/retriever";
 
 /**

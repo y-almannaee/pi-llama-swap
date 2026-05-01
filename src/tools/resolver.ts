@@ -1,7 +1,7 @@
 import { access, constants, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { DEFAULT_LLAMA_SERVER_URL, PROVIDER_ID } from "../constants";
-import { IAuth, IAuthFile } from "../interfaces/IAuthFile";
+import { Auth, AuthFile } from "../interfaces/auth";
 
 // The URL is detected once, to reuse forever
 let resolvedUrl: string | undefined;
@@ -60,7 +60,7 @@ export const resolveApiKey = async (): Promise<string> => {
   const authPath = join(process.env.HOME || ".", ".pi", "agent", "auth.json");
   if (!(await fileExists(authPath))) return placeholder;
 
-  const cfg = await readConfigValue<IAuthFile, IAuth | null>(
+  const cfg = await readConfigValue<AuthFile, Auth | null>(
     authPath,
     PROVIDER_ID,
   );
