@@ -21,7 +21,7 @@ export const DEFAULT_CTX = 128000;
 /**
  * Maximum number of tokens a model can generate in a single response
  */
-export const MAX_TOKENS = 16384;
+export const MAX_TOKENS = 32000;
 
 /**
  * Polling interval (ms) for checking model load status
