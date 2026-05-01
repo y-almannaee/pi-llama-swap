@@ -35,7 +35,7 @@ const selectModel = async (
 const getActionsForModel = async (model: BaseModel): Promise<Array<Action>> => {
   const routerModeActions: Record<Status, Array<Action>> = {
     [Status.LOADED]: [Action.SWITCH, Action.UNLOAD, Action.INFO, Action.CANCEL],
-    [Status.LOADING]: [Action.CANCEL],
+    [Status.LOADING]: [Action.INFO, Action.CANCEL],
     [Status.FAILED]: [Action.RETRY, Action.CANCEL],
     [Status.SLEEPING]: [Action.UNLOAD, Action.INFO, Action.CANCEL],
     [Status.UNLOADED]: [Action.LOAD, Action.CANCEL],
