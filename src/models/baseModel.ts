@@ -112,31 +112,26 @@ export abstract class BaseModel {
   /**
    * Unloads the model from llama-server
    */
-
   async unload(): Promise<void> {
     await rpc("/models/unload", { model: this.id });
   }
 
   /**
    * Polls llama-server to check when the model is loaded
+   *
+   * @param startTime The initial polling timestamp
    */
-  async pollStatus(): Promise<void> {
-    const startTime = Date.now();
+  async pollStatus(startTime = Date.now()): Promise<void> {
+    const status = await this.getStatus();
+    if (status !== Status.LOADING) return;
 
-    // Check loading status
-    try {
-      while ((await this.getStatus()) === Status.LOADING) {
-        // Force a timeout if we wasted too much time polling
-        if (Date.now() - startTime > POLLING_TIMEOUT) {
-          const message = `Model loading timed out after ${POLLING_TIMEOUT} ms: ${this.id}`;
-          throw new Error(message);
-        }
-
-        await new Promise((r) => setTimeout(r, POLLING_INTERVAL));
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+    // Force a timeout if we wasted too much time polling
+    if (Date.now() - startTime > POLLING_TIMEOUT) {
+      const message = `Model loading timed out after ${POLLING_TIMEOUT} ms: ${this.id}`;
       throw new Error(message);
     }
+
+    await new Promise((r) => setTimeout(r, POLLING_INTERVAL));
+    await this.pollStatus(startTime);
   }
 }
