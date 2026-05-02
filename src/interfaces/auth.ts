@@ -1,6 +1,6 @@
 import { PROVIDER_ID } from "../constants";
 
-export interface Auth {
+interface Auth {
   type: string;
   key: string;
 }
