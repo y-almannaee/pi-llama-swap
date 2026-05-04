@@ -1,5 +1,5 @@
 /**
- * The structure of llama-server's /health endpoint
+ * The structure of llama-swap's /health endpoint
  */
 export interface HealthEndpoint {
   status: "ok";

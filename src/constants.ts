@@ -1,17 +1,17 @@
 /**
  * This provider's id
  */
-export const PROVIDER_ID = "llama-server";
+export const PROVIDER_ID = "llama-swap";
 
 /**
  * This provider's name
  */
-export const PROVIDER_NAME = "Llama.cpp";
+export const PROVIDER_NAME = "Llama Swap";
 
 /**
  * The default URL if the resolver couldn't find it
  */
-export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
+export const DEFAULT_LLAMA_SWAP_URL = "http://127.0.0.1:8080";
 
 /**
  * The placeholder api-key if it couldn't be resolved
@@ -19,21 +19,16 @@ export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
 export const API_KEY_PLACEHOLDER = "sk-placeholder";
 
 /**
- * The default context if the server didn't expose it
+ * The default context window if the server didn't expose it
  */
-export const DEFAULT_CTX = 128000;
+export const DEFAULT_CTX = 128_000;
 
 /**
  * Maximum number of tokens a model can generate in a single response
  */
-export const MAX_TOKENS = 32000;
+export const MAX_TOKENS = 32_000;
 
 /**
- * Polling interval (ms) for checking model load status
+ * Items per page in the model browser
  */
-export const POLLING_INTERVAL = 500;
-
-/**
- * Maximum time (ms) to wait for model loading before giving up
- */
-export const POLLING_TIMEOUT = 60000;
+export const PAGE_SIZE = 15;

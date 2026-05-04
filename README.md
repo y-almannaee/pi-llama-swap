@@ -1,49 +1,72 @@
-# pi-llama-cpp
+# pi-llama-swap
 
-A [Pi Coding Agent](https://pi.dev/) extension that integrates with a running [llama.cpp server](https://github.com/ggml-org/llama.cpp) to provide live model browsing, loading, and switching directly from Pi.
+A [Pi Coding Agent](https://pi.dev/) extension that integrates with a running [llama-swap](https://github.com/mostlygeek/llama-swap) server to provide live model browsing, per-model configuration, and auto-registration.
 
 ## Features
 
-- **Auto-detect models** — discovers all models available on your running llama.cpp server
-- **Live status indicators** — see which models are loaded, loading, failed, sleeping, or unloaded with color-coded icons
-- **Load / unload / switch** — manage models directly from the Pi command palette
-- **Multi-model router support** — works with both single-model and multi-model llama.cpp server configurations
-- **Image capabilities detection** — detects multimodal models automatically
-- **Flexible URL resolution** — configures the server URL via project config, environment variable, or global settings
-
-### Status Indicators
-
-| Icon | Status | Description |
-|------|--------|-------------|
-| 🟢 | Loaded | Model is active and ready to use |
-| 🟡 | Loading | Model is currently being loaded |
-| 🔴 | Failed | Model failed to load |
-| 🔵 | Sleeping | Model is available, but inactive |
-| ⚪ | Unloaded | Model is not loaded on the server |
-
-> **Note**: The `Sleeping` status only shows when you start your server with `llama-server --sleep-idle-seconds <n> ...`.
-This is a **llama.cpp server flag** that tells the server to put idle models to sleep after `n` seconds.
-The model awakens automatically when you send a message.
+- **Model browser** — type-ahead search, arrow key navigation, pagination (15 per page)
+- **Stale-while-revalidate cache** — models fetched at startup and cached instantly; background refresh if data is stale (>5 min). Prevents empty screens on server timeouts.
+- **Grouped variants** — colon-suffixed variants (`:precise`, `:q4_0`, `:f16`, `:general`) grouped under the base model
+- **Per-model config overrides** — display name, context window, max tokens, image capability toggle, reasoning toggle
+- **Auto-save** — every change saves instantly to `~/.pi/agent/extensions/pi-llama-swap/config.json`
+- **Reset to defaults** — removes an override entirely; cached values fill the field
+- **Image capability detection** — auto-detects multimodal models from model ID keywords: `mmproj`, `mm-proj`, `multimodal`, `vision`, `clip`
+- **Reasoning toggle** — controls whether Pi sends extended thinking params to the API
+- **Metadata autodiscovery** — reads `context_length`, `n_ctx`, `upstream_port` from llama-swap model definitions
+- **Upstream metadata merge** — auto-discovers upstream model metadata (vLLM, ik_llama.cpp) for fields like `n_ctx_train`, `n_params`, file size, `max_model_len`
+- **Provider registration** — registers with Pi as `pi-llama-swap` provider with all config overrides applied
+- **Model selection events** — notifies when you switch models via Pi's model picker
+- **Flexible URL resolution** — configures server URL via project config, environment variable, or global settings
 
 ## Installation
 
-This package is a Pi extension. Install it with
-
 ```bash
-pi install npm:pi-llama-cpp
+pi install https://github.com/y-almannaee/pi-llama-swap
 ```
 
-or
+## Usage
 
-```bash
-pi install https://github.com/gsanhueza/pi-llama-cpp
-```
+### Prerequisites
+
+A running llama-swap server accessible from your machine.
+
+### Command
+
+| Command         | Description                                                  |
+| --------------- | ------------------------------------------------------------ |
+| `/swap:models`  | Browse models, search, and configure per-model settings      |
+
+When the llama-swap server is unreachable, `/swap:models` is still available (shows `Llama Swap models (offline)`) and displays cached models if available.
+
+### Model Browser
+
+1. **Search** — type a query to filter models (leave empty to show all)
+2. **Navigate** — use arrow keys to move, Enter to select
+3. **Paginated list** — models appear 15 at a time with `← Previous` / `Next →` navigation. Variants grouped under base model.
+4. **Action menu** — select a model to:
+   - **Configure** — edit per-model settings
+   - **Info** — view model details (ID, capabilities, context size)
+   - **Cancel** — exit
+
+### Per-model Configuration
+
+The configuration editor lets you adjust:
+
+- **Display name** — friendly name shown in model pickers
+- **Context window** — max context tokens
+- **Max output tokens** — max response length
+- **Image capability** — toggle text-only vs multimodal (auto-detected from model ID)
+- **Reasoning** — toggle extended thinking support
+
+Changes save instantly. To revert a field to its default, use **Reset to defaults** — this removes the override from `config.json` and lets the cached value take over.
 
 ## Configuration
 
-The extension resolves the llama.cpp server URL using the following priority order:
+### Server URL
 
-1. **Per-project config** — `.pi/llama-server.json` in your project root:
+Resolved in priority order:
+
+1. **Per-project config** — `.pi/llama-swap.json` in your project root:
 
    ```json
    {
@@ -51,97 +74,113 @@ The extension resolves the llama.cpp server URL using the following priority ord
    }
    ```
 
-2. **Environment variable** — `LLAMA_SERVER_URL`
+2. **Environment variable** — `LLAMA_SWAP_URL`
 
 3. **Global settings** — `~/.pi/agent/settings.json`:
 
    ```json
    {
-     "llamaServerUrl": "http://127.0.0.1:8080"
+     "llamaSwapUrl": "http://127.0.0.1:8080"
    }
    ```
 
 4. **Default** — `http://127.0.0.1:8080`
 
-### API Key
+### API Key (optional)
 
-If your llama.cpp server requires authentication, use `/login` in Pi, select the "API key" option, and choose the `Llama.cpp` provider from the list.
-
-Alternatively, configure the API key in `~/.pi/agent/auth.json` using the provider ID `llama-server`:
-
-> **Note**: The provider is displayed as **Llama.cpp** in the Pi UI, but its internal identifier is `llama-server` — use this ID when configuring `auth.json` or other programmatic access.
+Store in `~/.pi/agent/auth.json`:
 
 ```json
 {
-  "llama-server": {
-    "type": "api_key",
-    "key": "<your-api-key-here>"
+  "llama-swap": {
+    "key": "your-api-key"
   }
 }
 ```
 
-## Usage
+### Per-model overrides
 
-### Prerequisites
+Saved automatically by `/swap:models` to:
 
-Make sure your llama.cpp server is running with the appropriate flags.
-
-- For multi-model support (model router), start the server with:
-
-```bash
-llama-server --models-preset path/to/presets.ini ...
+```
+~/.pi/agent/extensions/pi-llama-swap/config.json
 ```
 
-- For single-model mode, start the server with:
-
-```bash
-llama-server --model path/to/model.gguf ...
+```json
+{
+  "models": {
+    "Qwen3.6-35B-A3B-UD-IQ4_NL-mmproj:precise": {
+      "displayName": "Qwen3.6-35B MM Coding",
+      "contextWindow": 131072,
+      "maxTokens": 17408,
+      "hasImage": true,
+      "reasoning": true
+    }
+  }
+}
 ```
 
-The extension determines the context size as follows:
-- **Router mode** — reads from the preset file's `ctx-size` and/or `fit-ctx` keys
-- **Single mode** — reads from the `/slots` endpoint (stores it in cache afterwards)
-- Falls back to `128000` if not available
+### Metadata autodiscovery
 
-### Commands
+If your llama-swap model definition includes a `metadata` block, the extension reads it automatically:
 
-| Command   | Description                                                                                |
-| --------- | ------------------------------------------------------------------------------------------ |
-| `/models` | Browse your models with live status. Select a model to load, switch, or unload it.         |
+```yaml
+metadata:
+  context_length: ${context-length}
+  n_ctx: ${context-length}
+  upstream_port: "${PORT}"
+```
 
-> **Note:** When the llama.cpp server is unreachable, `/models` is still available but shows the description `Llama.cpp models (offline)` and displays an error notification with the configured server URL.
+- `upstream_port` must be the exact port used by llama.cpp or the upstream server.
+- Everything else is treated as a macro for context length.
 
-### Model Actions
+### Upstream metadata merge
 
-When browsing models via the `/models` command, you can:
+If the upstream server (vLLM, ik_llama.cpp) exposes model metadata, the extension merges it automatically. Fields discovered include `n_ctx_train`, `n_params`, file size, and `max_model_len`.
 
-- **Load & switch** — Load an unloaded model and switch to it
-- **Switch model** — Switch to a model that is already loaded
-- **Unload** — Unload a loaded model to free memory
-- **Retry** — Retry loading a failed model
-- **Info** — View model details (ID, capabilities, context size)
-- **Cancel** — Cancel the current operation
+## Default Model Settings
 
-> **Note:** In single-model mode, only **Info** and **Cancel** are available, since there is only one model loaded on the server.
+Each model exposed to Pi includes these defaults:
 
-### Model Selection Event
-
-When you switch models via Pi's model picker (instead of using the `/models` command), the extension listens for the `model_select` event, which also loads the requested model before the conversation begins.
-
-This keeps the server in sync with the active model in Pi, regardless of how the switch was initiated — you don't need to manually load models before using them.
-
-### Loading Models
-
-When you trigger a load, switch, or retry action, the extension polls the server to track progress. If a model takes longer than **60 seconds** to load, the polling times out with an error.
-> **Note:** The timeout is only for the polling. The model might still be loading.
-
-### Model Configuration
-
-Each model exposed to Pi includes the following defaults:
-
-- **`maxTokens`** — `32000` (maximum possible tokens per response according to Pi's source code)
-- **`reasoning`** — `true` (assumed, as llama.cpp's `/models` endpoint does not expose it)
+- **`maxTokens`** — `32000`
+- **`reasoning`** — `true` (assumed, as llama-swap does not expose it per model)
 - **`cost`** — all zero (local model)
+- **`contextWindow`** — `128000` (fallback when server does not expose it)
+
+## Architecture
+
+```
+src/
+├── constants.ts           # Provider ID, URLs, defaults
+├── index.ts               # Main extension entry point
+├── config.ts              # Persistent config management
+├── events.ts              # model_select event handler
+├── handlers.ts            # /swap:models command handler
+├── enums/
+│   ├── action.ts          # Action definitions
+│   └── status.ts          # Model status enum
+├── interfaces/
+│   ├── auth.ts            # Auth file structure
+│   ├── events.ts          # Event types
+│   └── endpoints/
+│       ├── health.ts      # /health endpoint shape
+│       └── models.ts      # /v1/models response shapes
+├── models/
+│   └── swapModel.ts       # SwapModel class (OOP model wrapper)
+└── tools/
+    ├── resolver.ts        # URL and API key resolution
+    └── retriever.ts       # Health check, RPC, model listing
+```
+
+## Development
+
+```bash
+# Run tests
+npm test
+
+# Run tests once
+npm run test:run
+```
 
 ## Dependencies
 

@@ -1,49 +1,113 @@
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
+  ProviderModelConfig,
 } from "@mariozechner/pi-coding-agent";
 import { PROVIDER_ID, PROVIDER_NAME } from "./constants";
 import { onModelSelect } from "./events";
 import { modelsCommandHandler } from "./handlers";
+import { SwapModel } from "./models/swapModel";
+import { getModelOverride, readConfig } from "./config";
 import { resolveApiKey, resolveUrl } from "./tools/resolver";
-import { isServerReady, listModels } from "./tools/retriever";
+import { RawModel } from "./interfaces/endpoints/models";
+import { isServerReady } from "./tools/retriever";
+import {
+  fetchFresh,
+  getModels,
+  mergeUpstreamMeta,
+  resetCache,
+} from "./tools/cache";
+
+/**
+ * Resets the model cache. Exposed for testing.
+ */
+export { resetCache };
+
+/**
+ * Builds provider model configs from raw models, applying config overrides.
+ */
+async function buildProviderModels(
+  rawModels: RawModel[],
+): Promise<ProviderModelConfig[]> {
+  const config = readConfig();
+  const swapModels = rawModels.map((m) => new SwapModel(m));
+
+  return swapModels.map((model) => {
+    const override = getModelOverride(config, model.id);
+    return model.toProviderConfig(
+      override.displayName,
+      "reasoning" in override ? override.reasoning! : true,
+      override.contextWindow,
+      override.maxTokens,
+      "hasImage" in override ? override.hasImage : undefined,
+    );
+  });
+}
 
 export default async function (pi: ExtensionAPI) {
-  // Command registration
+  // Check server availability
   if (!(await isServerReady())) {
-    pi.registerCommand("models", {
+    pi.registerCommand("swap:models", {
       description: `${PROVIDER_NAME} models (offline)`,
       handler: async (
         _: string,
         ctx: ExtensionCommandContext,
       ): Promise<void> => {
-        const url = await resolveUrl(ctx.cwd);
-        ctx.ui.notify(`${PROVIDER_NAME} unreachable at ${url}`, "error");
+        ctx.ui.notify(`${PROVIDER_NAME} is unreachable`, "error");
       },
     });
-
     return;
   }
 
-  const cwd = process.cwd();
-  const url = await resolveUrl(cwd);
-  const serverModels = await listModels();
+  // Resolve URL and API key
+  const url = await resolveUrl(process.cwd());
+  const apiKey = await resolveApiKey();
 
-  pi.registerCommand("models", {
-    description: `Browse ${PROVIDER_NAME} models (live status)`,
-    handler: async (_: string, ctx: ExtensionCommandContext) =>
-      await modelsCommandHandler(ctx, pi, serverModels),
-  });
+  // Fetch models (populates cache for stale-while-revalidate)
+  const rawModels = await fetchFresh();
 
-  // Provider registration
+  // Optionally merge upstream metadata (n_ctx_train, max_model_len, etc.)
+  // Fire-and-forget — does not block startup
+  void mergeUpstreamMeta(url);
+
+  if (rawModels.length === 0) {
+    pi.registerCommand("swap:models", {
+      description: `${PROVIDER_NAME} models (no models)`,
+      handler: async (
+        _: string,
+        ctx: ExtensionCommandContext,
+      ): Promise<void> => {
+        ctx.ui.notify(
+          `${PROVIDER_NAME}: no models found at ${url}`,
+          "warning",
+        );
+      },
+    });
+    return;
+  }
+
+  // Register provider with all models
   pi.registerProvider(PROVIDER_ID, {
-    name: PROVIDER_NAME,
     baseUrl: `${url}/v1`,
     api: "openai-completions",
-    apiKey: await resolveApiKey(),
-    models: await Promise.all(serverModels.map((m) => m.toProviderConfig())),
+    apiKey,
+    models: await buildProviderModels(rawModels),
   });
 
-  // Events registration
+  // Register /models command — uses cached models (stale-while-revalidate)
+  // so it returns instantly and refreshes in the background
+  pi.registerCommand("swap:models", {
+    description: `Browse ${PROVIDER_NAME} models`,
+    handler: async (_: string, ctx: ExtensionCommandContext) => {
+      const models = await getModels();
+      if (models.length === 0) {
+        ctx.ui.notify(`No models loaded in ${PROVIDER_NAME}`, "info");
+        return;
+      }
+      await modelsCommandHandler(ctx, pi, models);
+    },
+  });
+
+  // Listen for model selection events
   pi.on("model_select", onModelSelect);
 }

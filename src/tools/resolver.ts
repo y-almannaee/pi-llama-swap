@@ -2,7 +2,7 @@ import { access, constants, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
   API_KEY_PLACEHOLDER,
-  DEFAULT_LLAMA_SERVER_URL,
+  DEFAULT_LLAMA_SWAP_URL,
   PROVIDER_ID,
 } from "../constants";
 import { AuthFile } from "../interfaces/auth";
@@ -12,39 +12,30 @@ let resolvedUrl: string | undefined;
 
 /**
  * Detects if a particular file is present
- * @param filePath The path
- * @returns True if exists
  */
 const fileExists = async (filePath: string): Promise<boolean> => {
   try {
     await access(filePath, constants.F_OK);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 };
 
 /**
  * Reads the contents of a file as JSON
- * @param filePath The path
- * @returns The content as JSON
  */
 const readContents = async <T>(filePath: string): Promise<T | null> => {
   const raw = await readFile(filePath, "utf-8");
-
   try {
-    const contents = JSON.parse(raw);
-    return contents;
-  } catch (err) {
+    return JSON.parse(raw) as T;
+  } catch {
     return null;
   }
 };
 
 /**
- * Reads a string value from a JSON config file
- * @param filePath Path to the JSON config file
- * @param key Key to extract from the parsed JSON
- * @returns The string value, or null if file/key missing or invalid
+ * Reads a value from a JSON config file
  */
 const readConfigValue = async <T>(
   filePath: string,
@@ -56,7 +47,6 @@ const readConfigValue = async <T>(
 
 /**
  * Reads API key from Pi's auth file
- * @returns The API key, as defined by the auth.json file
  */
 export const resolveApiKey = async (): Promise<string> => {
   const authPath = join(process.env.HOME || ".", ".pi", "agent", "auth.json");
@@ -67,8 +57,7 @@ export const resolveApiKey = async (): Promise<string> => {
 };
 
 /**
- * Resolves the llama-server url by searching for it in the global settings.json file
- * @returns The URL, if found.
+ * Resolves the llama-swap URL from global settings
  */
 const resolveGlobalUrl = async (): Promise<string | null> => {
   const globalPath = join(
@@ -77,65 +66,75 @@ const resolveGlobalUrl = async (): Promise<string | null> => {
     "agent",
     "settings.json",
   );
-
   if (!(await fileExists(globalPath))) return null;
-
-  return readConfigValue<Record<string, string>>(globalPath, "llamaServerUrl");
+  return readConfigValue<Record<string, string>>(globalPath, "llamaSwapUrl");
 };
 
 /**
- * Resolves the llama-server url by searching for it in the project's .pi/llama-server.json file
- * @param cwd The current working directory
- * @returns The URL, if found.
+ * Resolves the llama-swap URL from project-level config
  */
 const resolveProjectUrl = async (cwd: string): Promise<string | null> => {
-  const projectPath = join(cwd, ".pi", "llama-server.json");
-
+  const projectPath = join(cwd, ".pi", "llama-swap.json");
   if (!(await fileExists(projectPath))) return null;
   return readConfigValue<Record<string, string>>(projectPath, "url");
 };
 
 /**
- * Resolves the llama-server url by searching for it in the environment
- * @returns The URL, if found.
+ * Resolves the llama-swap URL from environment variable
  */
-const resolveEnvUrl = async (): Promise<string | null> => {
-  return process.env.LLAMA_SERVER_URL ?? null;
+const resolveEnvUrl = (): string | null => {
+  return process.env.LLAMA_SWAP_URL ?? null;
 };
 
 /**
- * Tries all possible ways to retrieve the llama-server URL
- * @param cwd The current working directory
- * @returns The URL, or a default if not found
+ * Tries all possible ways to retrieve the llama-swap URL
+ *
+ * Priority:
+ * 1. Per-project config (.pi/llama-swap.json)
+ * 2. Environment variable (LLAMA_SWAP_URL)
+ * 3. Global settings (~/.pi/agent/settings.json → llamaSwapUrl)
+ * 4. Default (http://127.0.0.1:8080)
  */
 const resolveUrlWithFallbacks = async (cwd: string): Promise<string> => {
-  // 1. per-project config
   let response = await resolveProjectUrl(cwd);
   if (response) return response;
 
-  // 2. env
-  response = await resolveEnvUrl();
+  response = resolveEnvUrl();
   if (response) return response;
 
-  // 3. global settings: ~/.pi/agent/settings.json
   response = await resolveGlobalUrl();
   if (response) return response;
 
-  // 4. default
-  return DEFAULT_LLAMA_SERVER_URL;
+  return DEFAULT_LLAMA_SWAP_URL;
 };
 
 /**
- * Resolves the URL where llama-server is running
- * @param cwd The current working directory
- * @returns The URL, or a default if not found
+ * Resolves the URL where llama-swap is running
  */
 export const resolveUrl = async (cwd: string): Promise<string> => {
   if (resolvedUrl) return resolvedUrl;
   const result = await resolveUrlWithFallbacks(cwd);
-
-  // Strip trailing slashes
   resolvedUrl = result.replace(/\/+$/, "");
-
   return resolvedUrl;
+};
+
+/**
+ * Resets the cached URL (useful for testing or reconfiguration)
+ */
+export const resetUrlCache = (): void => {
+  resolvedUrl = undefined;
+};
+
+/**
+ * Non-blocking URL cache refresh.
+ *
+ * Invalidates the cached URL and re-resolves it from config sources.
+ * Used as a fire-and-forget call to keep the URL fresh during active usage
+ * without blocking the UI flow.
+ *
+ * @param cwd Current working directory for project-level config lookup
+ */
+export const refreshUrl = async (cwd: string): Promise<void> => {
+  resetUrlCache();
+  await resolveUrl(cwd);
 };

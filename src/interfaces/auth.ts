@@ -1,7 +1,7 @@
 import { PROVIDER_ID } from "../constants";
 
 interface Auth {
-  type: string;
+  type?: string;
   key: string;
 }
 

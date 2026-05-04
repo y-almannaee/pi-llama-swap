@@ -1,23 +1,19 @@
 import { ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { PROVIDER_ID } from "./constants";
 import { ModelSelectEvent } from "./interfaces/events";
-import { listModels } from "./tools/retriever";
+import { refreshUrl } from "./tools/resolver";
 
 /**
- * Reacts to a new model event triggered by Pi
- * @param event Model selection event
- * @param ctx Pi context
+ * Reacts to a model selection event triggered by Pi.
+ * Notifies the user when a llama-swap model is selected via the model picker.
  */
-export const onModelSelect = async (
+export const onModelSelect = (
   event: ModelSelectEvent,
   ctx: ExtensionContext,
-) => {
+): void => {
   if (event.model.provider !== PROVIDER_ID) return;
+  ctx.ui.notify(`>> Using ${event.model.id}`, "info");
 
-  const models = await listModels();
-  const model = models.find((m) => m.id === event.model.id);
-  if (!model) return;
-
-  ctx.ui.notify(`>> Loading ${model.id}...`, "info");
-  await model.load();
+  // Non-blocking URL cache refresh — keeps URL fresh without blocking UI
+  void refreshUrl(process.cwd());
 };

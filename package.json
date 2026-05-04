@@ -1,22 +1,22 @@
 {
-  "name": "pi-llama-cpp",
-  "version": "0.2.3",
-  "description": "Pi extension for llama.cpp integration. Supports both router and single modes.",
+  "name": "pi-llama-swap",
+  "version": "0.2.0",
+  "description": "Pi extension for llama-swap integration. Auto-registers all configured models with per-model configuration.",
   "keywords": [
     "pi",
     "pi-package",
     "pi-extension",
-    "llama-cpp"
+    "llama-swap"
   ],
   "author": "Gabriel Sanhueza",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/gsanhueza/pi-llama-cpp.git"
+    "url": "git+https://github.com/y-almannaee/pi-llama-swap.git"
   },
-  "homepage": "https://github.com/gsanhueza/pi-llama-cpp#readme",
+  "homepage": "https://github.com/y-almannaee/pi-llama-swap#readme",
   "bugs": {
-    "url": "https://github.com/gsanhueza/pi-llama-cpp/issues"
+    "url": "https://github.com/y-almannaee/pi-llama-swap/issues"
   },
   "pi": {
     "extensions": [
@@ -33,11 +33,13 @@
     ]
   },
   "peerDependencies": {
-    "@mariozechner/pi-coding-agent": "*"
+    "@mariozechner/pi-coding-agent": "*",
+    "@mariozechner/pi-tui": "*"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "prettier-plugin-organize-imports": "^4.3.0",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.5"
   }
 }

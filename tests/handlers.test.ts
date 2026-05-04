@@ -1,159 +1,252 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { Action } from "../src/enums/action";
-import { Mode } from "../src/enums/mode";
-import { Status } from "../src/enums/status";
-import { DataProperty } from "../src/interfaces/endpoints/models";
-
-// Mock the retriever module before importing anything that depends on it
-vi.mock("../src/tools/retriever", () => ({
-  rpc: vi.fn(),
-  isServerReady: vi.fn(),
-  listModels: vi.fn(),
-}));
-
-class TestModel {
-  constructor(
-    private readonly model: DataProperty,
-    private readonly _mode: Mode,
-    private readonly _status: Status,
-  ) {}
-
-  get mode(): Mode {
-    return this._mode;
-  }
-
-  get capabilities(): ["text"] | ["image"] {
-    return ["text"];
-  }
-
-  async getStatus(): Promise<Status> {
-    return this._status;
-  }
-
-  async getContextSize(): Promise<number> {
-    return 4096;
-  }
-}
-
-const createModel = (
-  mode: Mode,
-  status: Status,
-  overrides: Partial<DataProperty> = {},
-) =>
-  new TestModel(
-    {
-      id: "test",
-      tags: [],
-      object: "model",
-      owned_by: "test",
-      created: Date.now(),
-      ...overrides,
-    },
-    mode,
-    status,
-  );
+import { RawModel } from "../src/interfaces/endpoints/models";
+import { SwapModel } from "../src/models/swapModel";
+import { buildModelEntries, buildSelectItems } from "../src/handlers";
 
 /**
- * Replicates the getActionsForModel logic from handlers.ts for testing
- * without needing the full Pi extension context.
+ * Tests the action availability logic for the /models command.
+ * In llama-swap, all models always have the same actions:
+ * CONFIGURE, INFO, CANCEL (no load/unload since llama-swap manages that).
  */
-const getActionsForModel = async (model: TestModel): Promise<Array<Action>> => {
-  const routerModeActions: Record<Status, Array<Action>> = {
-    [Status.LOADED]: [Action.SWITCH, Action.UNLOAD, Action.INFO, Action.CANCEL],
-    [Status.LOADING]: [Action.INFO, Action.CANCEL],
-    [Status.FAILED]: [Action.RETRY, Action.CANCEL],
-    [Status.SLEEPING]: [Action.UNLOAD, Action.INFO, Action.CANCEL],
-    [Status.UNLOADED]: [Action.LOAD, Action.CANCEL],
-  };
-
-  const singleModeActions: Record<Status, Array<Action>> = {
-    [Status.LOADED]: [Action.INFO, Action.CANCEL],
-    [Status.LOADING]: [Action.CANCEL],
-    [Status.FAILED]: [Action.CANCEL],
-    [Status.SLEEPING]: [Action.INFO, Action.CANCEL],
-    [Status.UNLOADED]: [Action.CANCEL],
-  };
-
-  const allActions =
-    model.mode === Mode.ROUTER ? routerModeActions : singleModeActions;
-
-  const status = await model.getStatus();
-  return allActions[status];
-};
-
 describe("Action availability", () => {
-  const actionMatrix: Array<{
-    mode: Mode;
-    status: Status;
-    expected: Action[];
-  }> = [
-    // Router mode
-    {
-      mode: Mode.ROUTER,
-      status: Status.LOADED,
-      expected: [Action.SWITCH, Action.UNLOAD, Action.INFO, Action.CANCEL],
-    },
-    {
-      mode: Mode.ROUTER,
-      status: Status.LOADING,
-      expected: [Action.INFO, Action.CANCEL],
-    },
-    {
-      mode: Mode.ROUTER,
-      status: Status.FAILED,
-      expected: [Action.RETRY, Action.CANCEL],
-    },
-    {
-      mode: Mode.ROUTER,
-      status: Status.SLEEPING,
-      expected: [Action.UNLOAD, Action.INFO, Action.CANCEL],
-    },
-    {
-      mode: Mode.ROUTER,
-      status: Status.UNLOADED,
-      expected: [Action.LOAD, Action.CANCEL],
-    },
-    // Single mode
-    {
-      mode: Mode.SINGLE,
-      status: Status.LOADED,
-      expected: [Action.INFO, Action.CANCEL],
-    },
-    { mode: Mode.SINGLE, status: Status.LOADING, expected: [Action.CANCEL] },
-    { mode: Mode.SINGLE, status: Status.FAILED, expected: [Action.CANCEL] },
-    {
-      mode: Mode.SINGLE,
-      status: Status.SLEEPING,
-      expected: [Action.INFO, Action.CANCEL],
-    },
-    { mode: Mode.SINGLE, status: Status.UNLOADED, expected: [Action.CANCEL] },
-  ];
+  const createModel = (id: string, name?: string): SwapModel =>
+    new SwapModel({ id, name: name ?? id } as RawModel);
 
-  it.each(actionMatrix)(
-    "should return correct actions for $mode/$status",
-    async ({ mode, status, expected }) => {
-      const model = createModel(mode, status);
-      const actions = await getActionsForModel(model);
-      expect(actions).toEqual(expected);
-    },
-  );
-
-  it("should always include CANCEL regardless of mode or status", async () => {
-    for (const mode of [Mode.ROUTER, Mode.SINGLE]) {
-      for (const status of Object.values(Status)) {
-        const model = createModel(mode, status);
-        const actions = await getActionsForModel(model);
-        expect(actions).toContain(Action.CANCEL);
-      }
-    }
+  it("should always include CANCEL action", () => {
+    expect(Object.values(Action)).toContain(Action.CANCEL);
   });
 
-  it("should not include mode-exclusive actions", async () => {
-    const singleLoaded = createModel(Mode.SINGLE, Status.LOADED);
-    expect(await getActionsForModel(singleLoaded)).not.toContain(Action.SWITCH);
-    expect(await getActionsForModel(singleLoaded)).not.toContain(Action.LOAD);
+  it("should always include CONFIGURE action", () => {
+    expect(Object.values(Action)).toContain(Action.CONFIGURE);
+  });
 
-    const singleFailed = createModel(Mode.SINGLE, Status.FAILED);
-    expect(await getActionsForModel(singleFailed)).not.toContain(Action.RETRY);
+  it("should always include INFO action", () => {
+    expect(Object.values(Action)).toContain(Action.INFO);
+  });
+
+  it("should not include load/unload actions (llama-swap manages lifecycle)", () => {
+    const actions = Object.values(Action);
+    expect(actions).not.toContain("Load" as Action);
+    expect(actions).not.toContain("Unload" as Action);
+    expect(actions).not.toContain("Switch" as Action);
+  });
+});
+
+describe("buildModelEntries", () => {
+  const createModel = (id: string, name?: string): SwapModel =>
+    new SwapModel({ id, name: name ?? id } as RawModel);
+
+  it("should group models by base ID", () => {
+    const models = [
+      createModel("Llama-3-8B:precise"),
+      createModel("Llama-3-8B"),
+      createModel("Llama-3-8B:general"),
+      createModel("Mistral-7B"),
+    ];
+
+    const entries = buildModelEntries(models, { models: {} });
+
+    // Llama-3-8B group (3 models) comes before Mistral-7B (1 model) alphabetically
+    expect(entries.length).toBe(4);
+    expect(entries[0].baseId).toBe("Llama-3-8B");
+    expect(entries[1].baseId).toBe("Llama-3-8B");
+    expect(entries[2].baseId).toBe("Llama-3-8B");
+    expect(entries[3].baseId).toBe("Mistral-7B");
+  });
+
+  it("should sort groups alphabetically by base ID", () => {
+    const models = [
+      createModel("Zephyr-7B"),
+      createModel("Alpha-13B"),
+      createModel("Mistral-7B"),
+    ];
+
+    const entries = buildModelEntries(models, { models: {} });
+
+    expect(entries[0].baseId).toBe("Alpha-13B");
+    expect(entries[1].baseId).toBe("Mistral-7B");
+    expect(entries[2].baseId).toBe("Zephyr-7B");
+  });
+
+  it("should preserve original order within a group", () => {
+    const models = [
+      createModel("Llama-3-8B:precise"),
+      createModel("Llama-3-8B"),
+      createModel("Llama-3-8B:general"),
+    ];
+
+    const entries = buildModelEntries(models, { models: {} });
+
+    expect(entries[0].id).toBe("Llama-3-8B:precise");
+    expect(entries[1].id).toBe("Llama-3-8B");
+    expect(entries[2].id).toBe("Llama-3-8B:general");
+  });
+});
+
+describe("buildSelectItems", () => {
+  const createModel = (id: string, name?: string): SwapModel =>
+    new SwapModel({ id, name: name ?? id } as RawModel);
+
+  it("should produce items with correct labels for grouped models", () => {
+    const models = [
+      createModel("Llama-3-8B"),
+      createModel("Llama-3-8B:precise"),
+    ];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    expect(items.length).toBe(2);
+    // Base model gets "(base)" suffix
+    expect(items[0].label).toBe("Llama-3-8B (base)");
+    // Variant uses full name with [variant] suffix
+    expect(items[1].label).toBe("Llama-3-8B:precise [:precise]");
+  });
+
+  it("should produce items without grouping suffix for standalone models", () => {
+    const models = [createModel("Mistral-7B")];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    expect(items[0].label).toBe("Mistral-7B");
+  });
+
+  it("should include searchable description with capabilities and context", () => {
+    const models = [createModel("Qwen3-32B-mmproj")];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    expect(items[0].description).toContain("text, image");
+    expect(items[0].description).toContain("ctx");
+    expect(items[0].description).toContain("max");
+  });
+
+  it("should apply display name override from config", () => {
+    const models = [createModel("Llama-3-8B")];
+    const config = {
+      models: {
+        "Llama-3-8B": { displayName: "My Custom Llama" },
+      },
+    };
+
+    const items = buildSelectItems(models, config);
+
+    expect(items[0].label).toBe("My Custom Llama");
+  });
+
+  it("should apply context window override from config", () => {
+    const models = [createModel("Llama-3-8B")];
+    const config = {
+      models: {
+        "Llama-3-8B": { contextWindow: 65536 },
+      },
+    };
+
+    const items = buildSelectItems(models, config);
+
+    expect(items[0].description).toContain("65,536");
+  });
+
+  it("should apply max tokens override from config", () => {
+    const models = [createModel("Llama-3-8B")];
+    const config = {
+      models: {
+        "Llama-3-8B": { maxTokens: 4096 },
+      },
+    };
+
+    const items = buildSelectItems(models, config);
+
+    expect(items[0].description).toContain("4,096");
+  });
+
+  it("should apply hasImage override from config", () => {
+    const models = [createModel("Llama-3-8B")];
+    const config = {
+      models: {
+        "Llama-3-8B": { hasImage: true },
+      },
+    };
+
+    const items = buildSelectItems(models, config);
+
+    expect(items[0].description).toContain("text, image");
+  });
+
+  it("should produce items filterable by label (case-insensitive match)", () => {
+    const models = [
+      createModel("Llama-3-8B"),
+      createModel("Mistral-7B"),
+    ];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    const filtered = items.filter(
+      (item) =>
+        item.label.toLowerCase().includes("llama") ||
+        (item.description ?? "").toLowerCase().includes("llama"),
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].value).toBe("Llama-3-8B");
+  });
+
+  it("should produce items filterable by description content", () => {
+    const models = [
+      createModel("Qwen3-32B-mmproj"),
+      createModel("Llama-3-8B"),
+    ];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    const filtered = items.filter(
+      (item) =>
+        item.label.toLowerCase().includes("mmproj") ||
+        (item.description ?? "").toLowerCase().includes("mmproj"),
+    );
+    expect(filtered.length).toBe(1);
+    expect(filtered[0].value).toBe("Qwen3-32B-mmproj");
+  });
+
+  it("should return empty filtered set when no label/description matches", () => {
+    const models = [createModel("Llama-3-8B")];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    const filtered = items.filter(
+      (item) =>
+        item.label.toLowerCase().includes("nonexistent") ||
+        (item.description ?? "").toLowerCase().includes("nonexistent"),
+    );
+    expect(filtered.length).toBe(0);
+  });
+});
+
+describe("Config override application", () => {
+  it("should apply display name override", () => {
+    const model = new SwapModel({
+      id: "test-model",
+      name: "Original Name",
+    } as RawModel);
+
+    const config = model.toProviderConfig("Custom Name", true);
+    expect(config.name).toBe("Custom Name");
+  });
+
+  it("should apply reasoning override", () => {
+    const model = new SwapModel({
+      id: "test-model",
+    } as RawModel);
+
+    const config = model.toProviderConfig(undefined, false);
+    expect(config.reasoning).toBe(false);
+  });
+
+  it("should default reasoning to true", () => {
+    const model = new SwapModel({
+      id: "test-model",
+    } as RawModel);
+
+    const config = model.toProviderConfig();
+    expect(config.reasoning).toBe(true);
   });
 });

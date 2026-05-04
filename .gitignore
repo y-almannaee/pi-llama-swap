@@ -1,2 +1,28 @@
+# Dependencies
 node_modules
-package-lock.json
+
+# Config (user-specific, generated at runtime)
+config.json
+
+# GitNexus agent config (not part of the extension)
+AGENTS.md
+
+# Pi internal
+.pi/
+
+# GitNexus
+.gitnexus/
+
+# Claude
+.claude/
+
+# Dev artifacts
+progress.md
+CLAUDE.md
+review-report.md
+REVIEW.md
+
+# OS
+.DS_Store
+*.swp
+*~
