@@ -1,6 +1,5 @@
 /**
- * The structure of llama-swap's /health endpoint
+ * The response from llama-swap's /health endpoint.
+ * Returns plain text "OK". isServerReady() only checks HTTP 2xx.
  */
-export interface HealthEndpoint {
-  status: "ok";
-}
+export type HealthResponse = "OK";

@@ -15,15 +15,63 @@ export interface LlamaSwapMeta {
   context_length?: number;
   /** Current n_ctx setting */
   n_ctx?: number;
-  /** Port of the upstream backend serving this model */
-  upstream_port?: number;
   /** Peer ID (for distributed setups) */
   peerID?: string;
+  /** Whether this model is currently loaded (merged from /running) */
+  isRunning?: boolean;
+  /** Lifecycle state from /running: "ready", "loading", "error" */
+  runningState?: string;
+  /** Time-to-live in seconds before auto-unload */
+  runningTtl?: number;
+  /** Full command used to start the upstream process (from /running) */
+  runningCmd?: string;
 }
 
 /**
- * Upstream backend metadata (e.g., ik_llama.cpp model_meta()).
- * Optional — not all upstreams expose this.
+ * A single entry from GET /running.
+ *
+ * Live shape (confirmed against llama-swap):
+ * {
+ *   "cmd": "llama-server.exe --port 5801 -m ...",
+ *   "description": "",
+ *   "model": "Qwen3.6-27B-Q4_K_M-ik-mtp",
+ *   "name": "",
+ *   "proxy": "http://localhost:5801",
+ *   "state": "ready",
+ *   "ttl": 10800
+ * }
+ */
+export interface RunningEntry {
+  /** Model identifier — matches a base id from /v1/models */
+  model?: string;
+  /** Lifecycle state: "ready", "loading", "error", etc. */
+  state?: string;
+  /** Internal upstream proxy URL (e.g. "http://localhost:5801") */
+  proxy?: string;
+  /** Full command used to start the upstream process */
+  cmd?: string;
+  /** Human-readable description (often empty) */
+  description?: string;
+  /** Display name (often empty) */
+  name?: string;
+  /** Time-to-live in seconds before auto-unload */
+  ttl?: number;
+}
+
+/**
+ * Response shape for GET /running.
+ */
+export interface RunningEndpoint {
+  running: RunningEntry[];
+}
+
+/**
+ * Upstream backend metadata — defensive shape for arbitrary backends.
+ *
+ * ik_llama.cpp exposes: vocab_type, n_vocab, n_ctx_train, n_embd,
+ * n_params, size. vLLM and other backends may expose different fields.
+ *
+ * We capture all numeric fields defensively via the index signature.
  */
 export interface UpstreamMeta {
   vocab_type?: number;
@@ -32,6 +80,8 @@ export interface UpstreamMeta {
   n_embd?: number;
   n_params?: number;
   size?: number;
+  /** Arbitrary backend-specific numeric fields */
+  [key: string]: unknown;
 }
 
 /**

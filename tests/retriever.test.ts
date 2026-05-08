@@ -10,7 +10,9 @@ vi.mock("../src/tools/resolver", () => ({
 
 import * as resolver from "../src/tools/resolver";
 import {
+  fetchUpstreamMeta,
   isServerReady,
+  listRunningModels,
   rpc,
   listModels,
   validateResponse,
@@ -279,10 +281,6 @@ describe("retriever", () => {
     it("should define ModelsEndpoint validator", () => {
       expect(validators.ModelsEndpoint).toEqual({ object: "list" });
     });
-
-    it("should define HealthEndpoint validator", () => {
-      expect(validators.HealthEndpoint).toEqual({ status: "ok" });
-    });
   });
 
   // -----------------------------------------------------------------------
@@ -343,4 +341,107 @@ describe("retriever", () => {
       expect(result[0].meta?.llamaswap?.upstream_port).toBe(8081);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // listRunningModels
+  // -----------------------------------------------------------------------
+
+  describe("listRunningModels", () => {
+    it("should return running models from /running", async () => {
+      mockFetch({
+        ok: true,
+        json: {
+          running: [
+            { model: "model-a", state: "ready", proxy: "http://localhost:5001" },
+            { model: "model-b", state: "loading", proxy: "http://localhost:5002" },
+          ],
+        },
+      });
+
+      const result = await listRunningModels();
+      expect(result.running).toHaveLength(2);
+      expect(result.running[0].model).toBe("model-a");
+      expect(result.running[0].state).toBe("ready");
+    });
+
+    it("should call /running endpoint", async () => {
+      mockFetch({ ok: true, json: { running: [] } });
+
+      await listRunningModels();
+
+      const call = vi.mocked(globalThis.fetch).mock.calls[0];
+      expect(call[0]).toBe(`${DEFAULT_LLAMA_SWAP_URL}/running`);
+    });
+
+    it("should propagate rpc errors", async () => {
+      mockFetch({ ok: false, status: 500, text: "Server error" });
+
+      await expect(listRunningModels()).rejects.toThrow("500: Server error");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // fetchUpstreamMeta
+  // -----------------------------------------------------------------------
+
+  describe("fetchUpstreamMeta", () => {
+    it("should return the first model from upstream response", async () => {
+      mockFetch({
+        ok: true,
+        json: {
+          object: "list",
+          data: [
+            {
+              id: "model.gguf",
+              meta: { n_ctx_train: 131072, n_params: 8000000000 },
+              max_model_len: 131072,
+            },
+          ],
+        },
+      });
+
+      const result = await fetchUpstreamMeta("Llama-3-8B");
+      expect(result).toEqual({
+        id: "model.gguf",
+        meta: { n_ctx_train: 131072, n_params: 8000000000 },
+        max_model_len: 131072,
+      });
+    });
+
+    it("should call /upstream/:model_id/v1/models with encoded model ID", async () => {
+      mockFetch({ ok: true, json: { object: "list", data: [{ id: "m" }] } });
+
+      await fetchUpstreamMeta("author/model:q4");
+
+      const call = vi.mocked(globalThis.fetch).mock.calls[0];
+      expect(call[0]).toBe(
+        `${DEFAULT_LLAMA_SWAP_URL}/upstream/author%2Fmodel%3Aq4/v1/models`,
+      );
+    });
+
+    it("should return null when upstream returns empty data", async () => {
+      mockFetch({ ok: true, json: { object: "list", data: [] } });
+
+      const result = await fetchUpstreamMeta("model-x");
+      expect(result).toBeNull();
+    });
+
+    it("should return null on non-ok response", async () => {
+      mockFetch({ ok: false, status: 503, text: "Service Unavailable" });
+
+      const result = await fetchUpstreamMeta("model-x");
+      expect(result).toBeNull();
+    });
+
+    it("should return null on network error", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn().mockRejectedValue(new Error("ECONNREFUSED")),
+      );
+
+      const result = await fetchUpstreamMeta("model-x");
+      expect(result).toBeNull();
+    });
+  });
+
 });

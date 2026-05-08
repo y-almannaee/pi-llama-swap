@@ -219,6 +219,52 @@ describe("buildSelectItems", () => {
     );
     expect(filtered.length).toBe(0);
   });
+
+  it("should include running indicator in description", () => {
+    const models = [createModel("Llama-3-8B")];
+
+    const items = buildSelectItems(models, { models: {} });
+
+    expect(items[0].description).toContain("not loaded");
+    expect(items[0].isRunning).toBe(false);
+  });
+
+  it("should show ready indicator for running models", () => {
+    const model = new SwapModel({
+      id: "Llama-3-8B",
+      name: "Llama 3 8B",
+      meta: { llamaswap: { isRunning: true, runningState: "ready" } },
+    } as RawModel);
+
+    const items = buildSelectItems([model], { models: {} });
+
+    expect(items[0].description).toContain("ready");
+    expect(items[0].isRunning).toBe(true);
+  });
+
+  it("should show loading indicator for loading models", () => {
+    const model = new SwapModel({
+      id: "Llama-3-8B",
+      meta: { llamaswap: { isRunning: true, runningState: "loading" } },
+    } as RawModel);
+
+    const items = buildSelectItems([model], { models: {} });
+
+    expect(items[0].description).toContain("loading");
+    expect(items[0].isRunning).toBe(true);
+  });
+
+  it("should show error indicator for error state", () => {
+    const model = new SwapModel({
+      id: "Llama-3-8B",
+      meta: { llamaswap: { isRunning: true, runningState: "error" } },
+    } as RawModel);
+
+    const items = buildSelectItems([model], { models: {} });
+
+    expect(items[0].description).toContain("error");
+    expect(items[0].isRunning).toBe(true);
+  });
 });
 
 describe("Config override application", () => {

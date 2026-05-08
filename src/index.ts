@@ -13,7 +13,9 @@ import { RawModel } from "./interfaces/endpoints/models";
 import { isServerReady } from "./tools/retriever";
 import {
   fetchFresh,
+  fetchRunningState,
   getModels,
+  mergeRunningState,
   mergeUpstreamMeta,
   resetCache,
 } from "./tools/cache";
@@ -66,9 +68,10 @@ export default async function (pi: ExtensionAPI) {
   // Fetch models (populates cache for stale-while-revalidate)
   const rawModels = await fetchFresh();
 
-  // Optionally merge upstream metadata (n_ctx_train, max_model_len, etc.)
+  // Fetch running state and merge into model entries
   // Fire-and-forget — does not block startup
-  void mergeUpstreamMeta(url);
+  const runningEntries = await fetchRunningState();
+  mergeRunningState(rawModels, runningEntries);
 
   if (rawModels.length === 0) {
     pi.registerCommand("swap:models", {
@@ -104,6 +107,9 @@ export default async function (pi: ExtensionAPI) {
         ctx.ui.notify(`No models loaded in ${PROVIDER_NAME}`, "info");
         return;
       }
+      // Refresh running state for live indicators
+      const runningEntries = await fetchRunningState();
+      mergeRunningState(models, runningEntries);
       await modelsCommandHandler(ctx, pi, models);
     },
   });

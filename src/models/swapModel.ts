@@ -3,7 +3,7 @@ import { DEFAULT_CTX, MAX_TOKENS } from "../constants";
 import { RawModel } from "../interfaces/endpoints/models";
 
 /**
- * Regex patterns that indicate multimodal (image) capability
+ * Regex patterns that indicate multimodal (image) capability in model IDs
  */
 const IMAGE_CAPABILITY_PATTERN = /mmproj|mm-proj|multimodal|vision|clip/i;
 
@@ -12,6 +12,36 @@ const IMAGE_CAPABILITY_PATTERN = /mmproj|mm-proj|multimodal|vision|clip/i;
  */
 export function detectImageCapability(modelId: string): boolean {
   return IMAGE_CAPABILITY_PATTERN.test(modelId);
+}
+
+/**
+ * Detects image capability from a llama-server launch command.
+ *
+ * Checks for mmproj-related flags. Returns:
+ * - true  if an enable flag is found (--mmproj, --mmproj-auto, -mm, -mmu, --mmproj-url)
+ * - false if a disable flag is found (--no-mmproj, --no-mmproj-auto)
+ * - null  if no mmproj flags present (caller should fall back to ID detection)
+ *
+ * Disable flags take precedence over enable flags.
+ */
+export function detectImageCapabilityFromCmd(cmd: string): boolean | null {
+  // Disable flags (checked first — take precedence)
+  if (/--no-mmproj(?!-auto)/.test(cmd)) return false;
+  if (/(^|\s)--no-mmproj-auto(?:\s|$)/.test(cmd)) return false;
+
+  // Enable flags
+  // --mmproj FILE  (but not --no-mmproj or --mmproj-auto)
+  if (/(^|\s)--mmproj(?!-auto)(?:\s|$)/.test(cmd)) return true;
+  // --mmproj-auto (but not --no-mmproj-auto)
+  if (/(^|\s)--mmproj-auto(?:\s|$)/.test(cmd)) return true;
+  // -mm FILE (short flag, must be standalone)
+  if (/(^|\s)-mm(?:\s|$)/.test(cmd)) return true;
+  // -mmu URL (short flag for --mmproj-url)
+  if (/(^|\s)-mmu(?:\s|$)/.test(cmd)) return true;
+  // --mmproj-url URL
+  if (/(^|\s)--mmproj-url(?:\s|$)/.test(cmd)) return true;
+
+  return null;
 }
 
 /**
@@ -57,10 +87,44 @@ export class SwapModel {
   }
 
   /**
-   * Detects if the model can process images
+   * Detects if the model can process images.
+   *
+   * Priority: launch command (--mmproj / --no-mmproj) → model ID patterns → false.
+   * Command-based detection only available when model is running (cmd comes from /running).
    */
   get hasImage(): boolean {
+    // Check launch command first — authoritative when model is running
+    const cmd = this.raw.meta?.llamaswap?.runningCmd;
+    if (cmd) {
+      const fromCmd = detectImageCapabilityFromCmd(cmd);
+      if (fromCmd !== null) return fromCmd;
+    }
+    // Fall back to model ID pattern detection
     return detectImageCapability(this.id);
+  }
+
+  /**
+   * Whether this model is currently loaded (running) in llama-swap.
+   * Populated by mergeRunningState() from /running endpoint.
+   */
+  get isRunning(): boolean {
+    return !!this.raw.meta?.llamaswap?.isRunning;
+  }
+
+  /**
+   * Lifecycle state from /running: "ready", "loading", "error", etc.
+   * Undefined if model is not running.
+   */
+  get runningState(): string | undefined {
+    return this.raw.meta?.llamaswap?.runningState;
+  }
+
+  /**
+   * Full command used to start the upstream process.
+   * Undefined if model is not running.
+   */
+  get runningCmd(): string | undefined {
+    return this.raw.meta?.llamaswap?.runningCmd;
   }
 
   /**

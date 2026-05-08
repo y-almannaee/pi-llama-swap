@@ -4,6 +4,7 @@ import { RawModel } from "../src/interfaces/endpoints/models";
 import {
   SwapModel,
   detectImageCapability,
+  detectImageCapabilityFromCmd,
   extractBaseId,
   extractVariant,
 } from "../src/models/swapModel";
@@ -129,4 +130,149 @@ describe("SwapModel", () => {
     });
   });
 
+  it("returns isRunning false by default", () => {
+    const model = new SwapModel(createRawModel());
+    expect(model.isRunning).toBe(false);
+  });
+
+  it("returns isRunning true when set", () => {
+    const model = new SwapModel({
+      id: "test-model",
+      meta: { llamaswap: { isRunning: true, runningState: "ready" } },
+    } as RawModel);
+    expect(model.isRunning).toBe(true);
+    expect(model.runningState).toBe("ready");
+  });
+
+  it("returns runningState undefined when not running", () => {
+    const model = new SwapModel(createRawModel());
+    expect(model.runningState).toBeUndefined();
+  });
+
+  it("returns runningCmd when set", () => {
+    const model = new SwapModel({
+      id: "test-model",
+      meta: {
+        llamaswap: {
+          isRunning: true,
+          runningState: "ready",
+          runningCmd: "llama-server --port 5001",
+        },
+      },
+    } as RawModel);
+    expect(model.runningCmd).toBe("llama-server --port 5001");
+  });
+
+  it("returns runningCmd undefined when not set", () => {
+    const model = new SwapModel(createRawModel());
+    expect(model.runningCmd).toBeUndefined();
+  });
+
+  it("uses cmd detection when running (mmproj flag → true)", () => {
+    const model = new SwapModel({
+      id: "text-only-model",
+      meta: {
+        llamaswap: {
+          isRunning: true,
+          runningCmd: "llama-server -m model.gguf --mmproj proj.gguf",
+        },
+      },
+    } as RawModel);
+    expect(model.hasImage).toBe(true);
+  });
+
+  it("uses cmd detection when running (no-mmproj flag → false)", () => {
+    const model = new SwapModel({
+      id: "Qwen3-32B-mmproj",
+      meta: {
+        llamaswap: {
+          isRunning: true,
+          runningCmd: "llama-server -m model.gguf --no-mmproj",
+        },
+      },
+    } as RawModel);
+    expect(model.hasImage).toBe(false);
+  });
+
+  it("falls back to ID detection when no cmd present", () => {
+    const model = new SwapModel(
+      createRawModel({ id: "Qwen3-32B-mmproj" }),
+    );
+    expect(model.hasImage).toBe(true);
+
+    const textModel = new SwapModel(
+      createRawModel({ id: "Llama-3-8B" }),
+    );
+    expect(textModel.hasImage).toBe(false);
+  });
+
+  it("falls back to ID detection when cmd has no mmproj flags", () => {
+    const model = new SwapModel({
+      id: "Qwen3-32B-mmproj",
+      meta: {
+        llamaswap: {
+          isRunning: true,
+          runningCmd: "llama-server -m model.gguf --ctx-size 131072",
+        },
+      },
+    } as RawModel);
+    expect(model.hasImage).toBe(true); // ID detection kicks in
+  });
+});
+
+describe("detectImageCapabilityFromCmd", () => {
+  it("returns true for --mmproj FILE", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --mmproj proj.gguf")).toBe(true);
+  });
+
+  it("returns true for -mm FILE (short flag)", () => {
+    expect(detectImageCapabilityFromCmd("llama-server -mm proj.gguf")).toBe(true);
+  });
+
+  it("returns true for -mmu URL (short flag for mmproj-url)", () => {
+    expect(detectImageCapabilityFromCmd("llama-server -mmu http://host/proj.gguf")).toBe(true);
+  });
+
+  it("returns true for --mmproj-url URL", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --mmproj-url http://host/proj.gguf")).toBe(true);
+  });
+
+  it("returns true for --mmproj-auto", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --mmproj-auto")).toBe(true);
+  });
+
+  it("returns false for --no-mmproj", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --no-mmproj")).toBe(false);
+  });
+
+  it("returns false for --no-mmproj-auto", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --no-mmproj-auto")).toBe(false);
+  });
+
+  it("disable flag takes precedence over enable flag", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --mmproj proj.gguf --no-mmproj")).toBe(false);
+  });
+
+  it("returns null when no mmproj flags present", () => {
+    expect(detectImageCapabilityFromCmd("llama-server -m model.gguf -t 14")).toBe(null);
+  });
+
+  it("handles --no-mmproj but not --no-mmproj-auto", () => {
+    // --no-mmproj (without -auto suffix) should match
+    expect(detectImageCapabilityFromCmd("llama-server --no-mmproj")).toBe(false);
+    // --no-mmproj-auto should also match (separate check)
+    expect(detectImageCapabilityFromCmd("llama-server --no-mmproj-auto")).toBe(false);
+    // --mmproj-auto should NOT match the --no-mmproj pattern
+    expect(detectImageCapabilityFromCmd("llama-server --mmproj-auto")).toBe(true);
+  });
+
+  it("handles multiline cmd (from YAML config)", () => {
+    const cmd = "llama-server\\n  --port 5801\\n  -mm proj.gguf\\n  -t 14";
+    expect(detectImageCapabilityFromCmd(cmd)).toBe(true);
+  });
+
+  it("handles -mm not matching inside other words", () => {
+    expect(detectImageCapabilityFromCmd("llama-server --commit abc")).toBe(null);
+    expect(detectImageCapabilityFromCmd("llama-server --model test-mm-test")).toBe(null);
+  });
 });

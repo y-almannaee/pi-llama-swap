@@ -45,12 +45,28 @@ export function buildModelEntries(
 }
 
 /**
+ * Returns a running state indicator string for display.
+ */
+function runningIndicator(state?: string): string {
+  switch (state) {
+    case "ready":
+      return "\u{1F7E2} ready"; // 🟢
+    case "loading":
+      return "\u{1F7E1} loading"; // 🟡
+    case "error":
+      return "\u{1F534} error"; // 🔴
+    default:
+      return "\u{26AB} not loaded"; // ⚫
+  }
+}
+
+/**
  * Builds SelectItem array for the model list, applying config overrides.
  */
 export function buildSelectItems(
   entries: SwapModel[],
   config: ModelConfig,
-): Array<{ value: string; label: string; description?: string }> {
+): Array<{ value: string; label: string; description?: string; isRunning?: boolean }> {
   return entries.map((entry) => {
     const override = getModelOverride(config, entry.id);
     const inGroup = entries.some(
@@ -67,8 +83,9 @@ export function buildSelectItems(
     const effectiveCtx = override.contextWindow ?? entry.contextWindow;
     const effectiveMax = override.maxTokens ?? entry.maxTokens;
     const caps = effectiveHasImage ? "text, image" : "text";
-    const desc = `${caps} • ctx ${effectiveCtx.toLocaleString()} • max ${effectiveMax.toLocaleString()}`;
-    return { value: entry.id, label, description: desc };
+    const stateStr = runningIndicator(entry.runningState);
+    const desc = `${caps} • ctx ${effectiveCtx.toLocaleString()} • max ${effectiveMax.toLocaleString()} • ${stateStr}`;
+    return { value: entry.id, label, description: desc, isRunning: entry.isRunning };
   });
 }
 
@@ -131,14 +148,23 @@ async function selectModel(
           for (let i = start; i < end; i++) {
             const item = filtered[i];
             const prefix = i === selected ? "> " : "  ";
-            const style =
-              i === selected
-                ? theme.fg("accent", prefix + item.label)
-                : prefix + item.label;
+            let labelStyle = prefix + item.label;
+
+            // Color-code based on running state
+            if (item.isRunning) {
+              labelStyle = i === selected
+                ? theme.fg("accent", labelStyle)
+                : theme.fg("success", labelStyle);
+            } else {
+              labelStyle = i === selected
+                ? theme.fg("accent", labelStyle)
+                : labelStyle;
+            }
+
             const desc = item.description
               ? theme.fg("dim", ` — ${item.description}`)
               : "";
-            const fullLine = style + desc;
+            const fullLine = labelStyle + desc;
             lines.push(
               fullLine.length > w - 2
                 ? fullLine.slice(0, w - 2)
@@ -399,7 +425,7 @@ export const modelsCommandHandler = async (
   if (action === undefined || action === Action.CANCEL) return;
 
   if (action === Action.INFO) {
-    const lines = [
+    const lines: string[] = [
       `ID           : ${model.id}`,
       `Model        : ${effective.displayName}`,
       `Capabilities : ${effective.hasImage ? "text, image" : "text"}`,
@@ -407,6 +433,11 @@ export const modelsCommandHandler = async (
       `Max tokens   : ${effective.maxTokens.toLocaleString()}`,
       `Reasoning    : ${effective.reasoning ? "yes" : "no"}`,
     ];
+    // Show launch command for running models (collapsed to single line)
+    if (model.runningCmd) {
+      const cmd = model.runningCmd.replace(/\s+/g, " ").trim();
+      lines.push(`Cmd          : ${cmd}`);
+    }
     ctx.ui.notify(lines.join("\n"), "info");
     return;
   }

@@ -1,16 +1,17 @@
 # pi-llama-swap
 
-A [Pi Coding Agent](https://pi.dev/) extension for [llama-swap](https://github.com/mostlygeek/llama-swap) integration.
+[Pi Coding Agent](https://pi.dev/) extension for [llama-swap](https://github.com/mostlygeek/llama-swap) integration.
 
 ## Features
 
 - Model browser with type-ahead search, arrow navigation, pagination
-- Models cached locally; offline fallback if server unreachable
+- Running state indicators (🟢 ready / 🟡 loading / 🔴 error / ⚫ not loaded)
+- Models cached locally with stale-while-revalidate (5-minute freshness)
 - Variant grouping (`:precise`, `:q4_0`, `:f16` under base model)
 - Per-model config: display name, context window, max tokens, image capability, reasoning
-- Image capability auto-detection (`mmproj`, `mm-proj`, `multimodal`, `vision`, `clip`)
-- Metadata autodiscovery from llama-swap model definitions
-- Upstream metadata merge (vLLM, ik_llama.cpp)
+- Image capability detection: launch command (`--mmproj`, `--no-mmproj`, etc.) takes precedence, falls back to model ID patterns (`mmproj`, `mm-proj`, `multimodal`, `vision`, `clip`)
+- Context window autodiscovery from llama-swap metadata (`context_length`, `n_ctx`)
+- Upstream metadata via `/upstream/:model_id` proxy (only fetches when model is running, never triggers swap)
 
 ## Installation
 
@@ -28,7 +29,7 @@ pi install https://github.com/y-almannaee/pi-llama-swap
 
 ### Model Browser
 
-Type to filter. Arrow keys to navigate. Enter to select.
+Type to filter. Arrow keys to navigate. Enter to select. Running models are color-coded green.
 
 Action menu:
 - **Configure** — edit per-model settings
@@ -40,7 +41,7 @@ Action menu:
 - Display name
 - Context window
 - Max output tokens
-- Image capability (auto-detected from model ID)
+- Image capability (auto-detected from launch command, then model ID)
 - Reasoning (extended thinking)
 
 Changes save automatically. **Reset to defaults** removes an override.
@@ -86,22 +87,11 @@ Saved to `~/.pi/agent/extensions/pi-llama-swap/config.json`:
 }
 ```
 
-### Metadata autodiscovery
+### Upstream metadata
 
-Add to llama-swap model definition:
+Extension calls `/upstream/:model_id/v1/models` to fetch backend metadata (`n_ctx_train`, `n_params`, `max_model_len`, etc.). This only runs when the model is already loaded (verified via `/running`), so it never triggers an unwanted model swap. Non-running models skip the upstream fetch silently.
 
-```yaml
-metadata:
-  context_length: ${context-length}
-  n_ctx: ${context-length}
-  upstream_port: "${PORT}"
-```
-
-`upstream_port` must match the upstream server port. Other fields are context length macros.
-
-### Upstream metadata merge
-
-Auto-discovers `n_ctx_train`, `n_params`, file size, `max_model_len` from vLLM or ik_llama.cpp.
+Supports arbitrary backend shapes (ik_llama.cpp, vLLM, etc.) — all numeric fields from the upstream `meta` block are captured defensively.
 
 ## Defaults
 
@@ -125,14 +115,13 @@ src/
 │   ├── auth.ts            # Auth file structure
 │   ├── events.ts          # Event types
 │   └── endpoints/
-│       ├── health.ts      # /health endpoint shape
-│       └── models.ts      # /v1/models response shapes
+│       └── models.ts      # /v1/models, /running, upstream response shapes
 ├── models/
 │   └── swapModel.ts       # SwapModel class
 └── tools/
-    ├── cache.ts           # Model cache
+    ├── cache.ts           # Model cache, running state, upstream metadata merge
     ├── resolver.ts        # URL and API key resolution
-    └── retriever.ts       # Health check, RPC, model listing, validation
+    └── retriever.ts       # RPC, model listing, running state, upstream proxy
 ```
 
 ## Development
@@ -148,3 +137,5 @@ npm run test:run  # Run once
 | ------------------------------- | ------------------------------------- |
 | `@mariozechner/pi-coding-agent` | Pi Coding Agent SDK (peer dependency) |
 | `@mariozechner/pi-tui`          | TUI primitives (peer dependency)      |
+
+```

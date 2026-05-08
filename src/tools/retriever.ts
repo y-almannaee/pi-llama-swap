@@ -1,6 +1,9 @@
 import { API_KEY_PLACEHOLDER } from "../constants";
-import { HealthEndpoint } from "../interfaces/endpoints/health";
-import { ModelsEndpoint, RawModel } from "../interfaces/endpoints/models";
+import {
+  ModelsEndpoint,
+  RawModel,
+  RunningEndpoint,
+} from "../interfaces/endpoints/models";
 import { resolveApiKey, resolveUrl } from "./resolver";
 
 // ---------------------------------------------------------------------------
@@ -38,7 +41,6 @@ export const validateResponse = (data: unknown, schema: Validator): void => {
 /** Pre-built validators for known endpoint shapes. */
 export const validators = {
   ModelsEndpoint: { object: "list" } satisfies Validator,
-  HealthEndpoint: { status: "ok" } satisfies Validator,
 } as const;
 
 /**
@@ -104,3 +106,45 @@ export const listModels = async (): Promise<RawModel[]> => {
   );
   return payload.data;
 };
+
+/**
+ * Retrieves the list of currently running (loaded) models from llama-swap.
+ *
+ * Uses GET /running which returns { running: [{ model, state, proxy, ... }] }.
+ * Returns the full RunningEndpoint payload for callers that need state/proxy.
+ */
+export const listRunningModels = async (): Promise<RunningEndpoint> => {
+  return rpc<RunningEndpoint>("/running");
+};
+
+/**
+ * Fetches upstream metadata for a model via llama-swap's /upstream/:id proxy.
+ *
+ * Calls GET /upstream/:model_id/v1/models which proxies to the backend
+ * serving that model. Returns the first (and only) model entry from the
+ * upstream's response.
+ *
+ * ⚠️  WARNING: This endpoint triggers a model swap if the model is not
+ * currently running. Callers MUST verify the model is running (via
+ * listRunningModels) before calling this function.
+ *
+ * Silently returns null if the request fails (4xx/5xx, network error,
+ * or empty response). Callers should implement their own retry/backoff.
+ */
+export const fetchUpstreamMeta = async (
+  modelId: string,
+): Promise<RawModel | null> => {
+  try {
+    const payload = await rpc<ModelsEndpoint>(
+      `/upstream/${encodeURIComponent(modelId)}/v1/models`,
+    );
+    const models = payload.data;
+    if (!Array.isArray(models) || models.length === 0) return null;
+    return models[0];
+  } catch {
+    // Upstream not ready, model not loaded, or network error — silent
+    return null;
+  }
+};
+
+
